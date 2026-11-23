@@ -1,0 +1,58 @@
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+body{margin:0;background:#222;color:#eee;font-family:sans-serif;text-align:center}
+#st{margin:14px;font-size:20px}
+#b{display:grid;grid-template-columns:repeat(8,1fr);width:100vw;height:100vw;max-width:480px;max-height:480px;margin:0 auto}
+.s{display:flex;align-items:center;justify-content:center;font-size:10vw}
+.l{background:#eed9b6}.d{background:#b58863}
+.sel{background:#f6f669!important}.hint{box-shadow:inset 0 0 0 4px #4caf50}
+button{font-size:18px;padding:10px 16px;margin:12px 4px 0}
+</style></head><body>
+<div id="st"></div><div id="b"></div>
+<button onclick="init()">New game</button><button onclick="undo()">Undo</button><button id="m" onclick="mode()">vs AI</button>
+<script>
+const G={P:'♟',R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'},V={P:100,N:320,B:330,R:500,Q:900,K:0};
+let b,turn,sel,hist,ai=true,over;
+const st=t=>document.getElementById('st').textContent=t;
+function init(){b=[];const k='RNBQKBNR';for(let i=0;i<64;i++){const r=i>>3,f=i&7;b[i]=r==0?'b'+k[f]:r==1?'bP':r==6?'wP':r==7?'w'+k[f]:null}
+turn='w';sel=null;hist=[];over=false;draw();st('White to move')}
+function mode(){ai=!ai;document.getElementById('m').textContent=ai?'vs AI':'2 player';init()}
+function pseudo(b,i){const p=b[i],c=p[0],t=p[1],r=i>>3,f=i&7,o=[];
+const add=(rr,ff)=>{if(rr<0||rr>7||ff<0||ff>7)return 0;const j=rr*8+ff;if(!b[j]){o.push(j);return 1}if(b[j][0]!=c)o.push(j);return 0};
+if(t=='P'){const d=c=='w'?-1:1;if(r+d<0||r+d>7)return o;
+if(!b[(r+d)*8+f]){o.push((r+d)*8+f);if(r==(c=='w'?6:1)&&!b[(r+2*d)*8+f])o.push((r+2*d)*8+f)}
+for(const x of[-1,1]){const ff=f+x;if(ff>=0&&ff<8){const j=(r+d)*8+ff;if(b[j]&&b[j][0]!=c)o.push(j)}}return o}
+const N=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]],K=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+if(t=='N')N.forEach(m=>add(r+m[0],f+m[1]));
+else if(t=='K')K.forEach(m=>add(r+m[0],f+m[1]));
+else K.forEach((m,k)=>{if(t=='R'&&k>3||t=='B'&&k<4)return;let rr=r+m[0],ff=f+m[1];while(add(rr,ff)){rr+=m[0];ff+=m[1]}});
+return o}
+function mv(b,a,z){const n=b.slice();n[z]=n[a];n[a]=null;if(n[z][1]=='P'&&(z>>3==0||z>>3==7))n[z]=n[z][0]+'Q';return n}
+function chk(b,c){const k=b.indexOf(c+'K');for(let i=0;i<64;i++)if(b[i]&&b[i][0]!=c&&pseudo(b,i).includes(k))return true;return false}
+function legal(b,i){return pseudo(b,i).filter(z=>!chk(mv(b,i,z),b[i][0]))}
+function all(b,c){const o=[];for(let i=0;i<64;i++)if(b[i]&&b[i][0]==c)legal(b,i).forEach(z=>o.push([i,z]));return o}
+function ev(b){let s=0;for(let i=0;i<64;i++)if(b[i]){const q=b[i];const v=V[q[1]]+(q[1]=='P'?(q[0]=='w'?7-(i>>3):i>>3)*5:0);s+=q[0]=='w'?v:-v}return s}
+function search(b,c,d,a,be){const m=all(b,c);if(!m.length)return chk(b,c)?(c=='w'?-1e5-d:1e5+d):0;if(d==0)return ev(b);
+let best=c=='w'?-1e9:1e9;
+for(const [x,y] of m){const s=search(mv(b,x,y),c=='w'?'b':'w',d-1,a,be);
+if(c=='w'){best=Math.max(best,s);a=Math.max(a,s)}else{best=Math.min(best,s);be=Math.min(be,s)}
+if(be<=a)break}return best}
+function aiMove(){const m=all(b,'b').sort(()=>Math.random()-.5);let bs=1e9,bm;
+for(const [x,y] of m){const s=search(mv(b,x,y),'w',2,-1e9,1e9);if(s<bs){bs=s;bm=[x,y]}}if(bm)play(bm[0],bm[1])}
+function status(){const m=all(b,turn);
+if(!m.length){over=true;st(chk(b,turn)?'Checkmate! '+(turn=='w'?'Black':'White')+' wins':'Stalemate')}
+else st((turn=='w'?'White':'Black')+' to move'+(chk(b,turn)?' (check)':''))}
+function play(a,z){hist.push([b,turn]);b=mv(b,a,z);turn=turn=='w'?'b':'w';sel=null;draw();status();
+if(!over&&ai&&turn=='b')setTimeout(aiMove,150)}
+function tap(i){if(over||ai&&turn=='b')return;
+if(sel!==null&&legal(b,sel).includes(i))return play(sel,i);
+sel=b[i]&&b[i][0]==turn?i:null;draw()}
+function undo(){if(!hist.length)return;let n=ai&&hist.length>1?2:1;while(n--)[b,turn]=hist.pop();sel=null;over=false;draw();status()}
+function draw(){const e=document.getElementById('b');e.innerHTML='';const h=sel!==null?legal(b,sel):[];
+b.forEach((p,i)=>{const d=document.createElement('div');
+d.className='s '+(((i>>3)+i)%2?'d':'l')+(i==sel?' sel':'')+(h.includes(i)?' hint':'');
+if(p){d.textContent=G[p[1]]+'\uFE0E';d.style.color=p[0]=='w'?'#fff':'#000';
+d.style.textShadow=p[0]=='w'?'0 0 3px #000,0 0 3px #000':'0 0 2px #fff'}
+d.onclick=()=>tap(i);e.appendChild(d)})}
+init();
+</script></body></html>
